@@ -22,7 +22,7 @@ from pykrak import wave_inverse_iteration as wii
 from matplotlib import pyplot as plt
 
 
-def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, verbose=True):
+def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, sav_z_arr, verbose=True):
     """
     Get phi and gammas
     z_arr - np 1d array 
@@ -38,6 +38,8 @@ def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, verbose=True):
         horizontal wavenumbers in cycles / km
     omega_I - float
         inertial frequency in rad /s 
+    sav_z_arr - np 1d array
+        depths to save phi at
     """
 
     if b_sq.size != z_arr.size - 2:
@@ -46,7 +48,7 @@ def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, verbose=True):
     modes = []
 
     omega_arr = np.zeros((J, kgrid_cpkm.size))
-    phi_arr = np.zeros((z_arr.size, J, kgrid_cpkm.size))
+    phi_arr = np.zeros((sav_z_arr.size, J, kgrid_cpkm.size))
 
     for i in range(kgrid_cpkm.size):
         k = kgrid_cpkm[i]
@@ -59,7 +61,8 @@ def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, verbose=True):
         omegas = np.sqrt(k_radpm ** 2 / (gammas**2) + omega_I**2) #rad/s
         omega_arr[:,i] = omegas
         phi = wii.get_phi(gammas, k_radpm, h, b_sq)
-        phi_arr[:,:,i] = phi
+        for j in range(J):
+            phi_arr[:,j,i] = interp.vec_lin_int(sav_z_arr, z_arr, phi[:,j])
     return omega_arr, phi_arr
 
 @njit
@@ -182,13 +185,21 @@ class IWDispersion:
         self.mesh_dz = mesh_dz
         return
 
-    def set_sim_params(self, kgrid_cpkm, J, mesh_dz):
+    def _set_sav_dz(self, sav_dz):
+        """
+        Set mesh spacing for saving internal wave simulation
+        """
+        self.sav_dz = sav_dz
+        return
+
+    def set_sim_params(self, kgrid_cpkm, J, mesh_dz, sav_dz):
         """
         Set simulation parameters
         """
         self._set_kgrid(kgrid_cpkm)
         self._set_J(J)
         self._set_mesh_dz(mesh_dz)
+        self._set_sav_dz(sav_dz)
         return
     
     def compute_omega_phi_arr(self,verbose=True):
@@ -203,7 +214,12 @@ class IWDispersion:
         zgrid, b_sq, h = self._get_b_sq(mesh_dz)
         kgrid_cpkm = self.kgrid_cpkm
         omega_I = self.omegaI
-        omega_arr, phi_arr = iw_solve(zgrid, b_sq[1:-1], h, J, kgrid_cpkm, omega_I, verbose=verbose   )
+        Z = zgrid[-1] - zgrid[0]
+        N_sav = int(Z / self.sav_dz) + 1
+        sav_zgrid = np.linspace(zgrid[0], zgrid[-1], N_sav)
+        self.zgrid_sav = sav_zgrid
+        self.Nz_sav = N_sav
+        omega_arr, phi_arr = iw_solve(zgrid, b_sq[1:-1], h, J, kgrid_cpkm, omega_I, sav_zgrid, verbose=verbose   )
         self.omega_arr = omega_arr
         self.phi_arr = phi_arr
         self._fill_omega_spl_arr()
@@ -223,8 +239,8 @@ class IWDispersion:
     def _fill_phi_spl_arr(self):
         phi_arr = self.phi_arr
         kgrid_cpkm = self.kgrid_cpkm
-        phi_spl_arr = np.zeros((self.Nz, self.J, self.Nk))
-        for i in range(self.Nz):
+        phi_spl_arr = np.zeros((self.Nz_sav, self.J, self.Nk))
+        for i in range(self.Nz_sav):
             for j in range(self.J):
                 spl = interp.get_spline(kgrid_cpkm, phi_arr[i,j,:], 1e30, 1e30)
                 phi_spl_arr[i,j,:] = spl
@@ -240,7 +256,7 @@ class IWDispersion:
 
     def get_phi(self, k_cpkm):
         phi_arr, phi_spl_arr = self.phi_arr, self.phi_spl_arr
-        J, Nz = self.J, self.Nz
+        J, Nz = self.J, self.Nz_sav
         phi = phi_interp(k_cpkm, phi_arr, phi_spl_arr, J, Nz, kgrid_cpkm)
         return phi
 
@@ -252,7 +268,7 @@ class IWDispersion:
     def make_disp_func(self):
         omega_arr, omega_spl_arr = self.omega_arr, self.omega_spl_arr
         phi_arr, phi_spl_arr = self.phi_arr, self.phi_spl_arr
-        J, Nz = self.J, self.Nz
+        J, Nz = self.J, self.Nz_sav
         kgrid_cpkm = self.kgrid_cpkm
         @njit
         def disp_func(k_cpkm):
