@@ -12,7 +12,7 @@ Institution: Scripps Institution of Oceanography, UC San Diego
 import numpy as np
 from matplotlib import pyplot as plt
 from iw_sim import iw_dispersion as iw_disper
-from iw_sim import iw_displacement as iw_displ
+from iw_sim import iw_field as iw_field
 
 fnames = ['mfn7.txt', 'prof336.txt', 'medsea.txt']
 for fname in fnames:
@@ -41,14 +41,11 @@ for fname in fnames:
     kmax = 0.7
     Nk = 10
     kgrid_cpkm=np.linspace(kmin, kmax, Nk)
-    J = 200
+    J = 20
     mesh_dz = 1.0
     sav_dz = 1.0
     disper.set_sim_params(kgrid_cpkm, J, mesh_dz, sav_dz)
     disper.compute_omega_phi_arr()
-    print(disper.phi_arr.shape)
-
-    print(disper.omega_arr / (2*np.pi) * 3600)
     plt.figure()
     plt.suptitle(fname + ' dispersion relation')
     plt.plot(kgrid_cpkm, disper.omega_arr.T / (2*np.pi) * 3600, 'ko')
@@ -61,7 +58,6 @@ for fname in fnames:
     plt.plot(kgrid_cpkm, dzeta_dz.T, 'ko')
     plt.xlabel('k (cpkm)')
     plt.ylabel('max |dzeta/dz| (mode)')
-    plt.show()
 
 
     """ now compute displacement"""
@@ -73,21 +69,35 @@ for fname in fnames:
     Nt = 1
     xmax = 50*1e3
     dx_des = 500
-    J = 40
+    J = 20
     jstar = 1.8
     E0 = 4.0
-    displ = iw_displ.IWDisplacement(disper)
-    displ.add_GM_params(jstar, E0)
-    displ.add_displacement_params(dk_cpkm, Nkx, Nky, dt, Nt, xmax, dx_des, J)
-    x, zeta_xzt = displ.gen_disp_field()
+    field = iw_field.IWField(disper)
+    field.add_GM_params(jstar, E0)
+    field.add_field_params(dk_cpkm, Nkx, Nky, dt, Nt, xmax, dx_des, J)
+    #x, zeta_xzt = field.gen_zeta_field()
+    x, zeta_xzt, u_xzt, v_xzt, w_xzt = field.gen_zuvw_field()
     zeta_xzt = np.squeeze(zeta_xzt).T
+    u_xzt = np.squeeze(u_xzt).T
+    v_xzt = np.squeeze(v_xzt).T
+    w_xzt = np.squeeze(w_xzt).T
+    objs = [zeta_xzt, u_xzt, v_xzt, w_xzt]
+    labels = ['zeta', 'u', 'v', 'w']
 
-    plt.figure()
-    plt.pcolormesh(x, disper.zgrid_sav, zeta_xzt)
-    plt.colorbar()
-    plt.xlabel('x (m)')
-    plt.ylabel('z (m)')
-    plt.gca().invert_yaxis()
+
+    for i in range(4):
+        obj = objs[i]
+        label = labels[i]
+        plt.figure()
+        plt.pcolormesh(x, disper.zgrid_sav, obj)
+        plt.colorbar()
+        plt.xlabel('x (m)')
+        plt.ylabel('z (m)')
+        plt.gca().invert_yaxis()
+        plt.suptitle(label)
+
+    plt.show()
+
 
     dzeta_dz = np.gradient(zeta_xzt, disper.zgrid_sav, axis=0)
     plt.figure()

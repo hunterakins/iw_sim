@@ -38,6 +38,40 @@ def add_m_contrib(hlzt, k, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm):
         hlzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
     return
 
+
+def add_huvw_m_contrib(hlzt, ulzt, vlzt, wlzt, dk_radpm, k, l, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm, phi_jlm_grad, omega_I):
+    """
+    The contribution for displacment, horizontal velocity, and verticl velocity
+    """
+    variance = p_kj / 2 / (2*np.pi*k) # first 2 is for real and imag., 2pi k is for cartesian kx, ky
+    gplus_jlm = np.random.randn()*np.sqrt(variance) + 1j*np.random.randn()*np.sqrt(variance)
+    gminus_jlm = np.random.randn()*np.sqrt(variance) + 1j*np.random.randn()*np.sqrt(variance)
+    gplus_jlminus_m = np.random.randn()*np.sqrt(variance) + 1j*np.random.randn()*np.sqrt(variance)
+    gminus_jlminus_m = np.random.randn()*np.sqrt(variance) + 1j*np.random.randn()*np.sqrt(variance)
+
+    for t_index in range(Nt):
+        pos_m_contrib = (gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) + gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm
+        neg_m_contrib = (gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) + gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm
+        hlzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
+       
+        fact = l * omega_jlm + 1j * omega_I * m
+        fact *= dk_radpm
+        fact /= k**2
+        pos_m_contrib = (fact*gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        neg_m_contrib = (fact*gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        ulzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
+
+
+        fact = m * omega_jlm - 1j * omega_I * l
+        fact *= dk_radpm
+        fact /= k**2
+        pos_m_contrib = (fact*gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        neg_m_contrib = (fact*gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        vlzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
+
+        wlzt[l-1,:,t_index] = hlzt[l-1, :, t_index] * 1j *omega_jlm 
+    return 
+
 def add_m_incoh_contrib(hlzt, k, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm):
     variance = p_kj / (2*np.pi*k) # 2pi k is for cartesian kx, ky
     for t_index in range(Nt):
@@ -98,7 +132,7 @@ def get_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar
                     add_m_contrib(hlzt, k_radpm, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm) 
     return hlzt
 
-def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar, E0):
+def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar, E0, w=False):
     """
     Get the Fourier transform of a displacement field realization on the plane y=0
     evaluated at discrete wavenumbers kx = l \Delta k
@@ -111,6 +145,15 @@ def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
         Nt: int, number of time steps
         J: int, maximum mode number
         latitude: float, latitude in degrees
+        BN0 : float
+            integral of N^2 over the ocean depth in CPH
+        jstar : int
+            mode scale for GM
+        E0 : float
+            energy density factor (4.0 is typical). See Richard Evans notes
+            for some details
+        w : boolean
+            if True, compute vertical velocity correlation
 
     NOTE: I DO NOT FACTOR IN THE APPROPRIATE SCALING FOR THE VARIANCES BASED ON DK,
     I HANDLE THAT IN AT THE END WHEN I DO THE FOURIER TRANSFORM OVER KX
@@ -144,18 +187,21 @@ def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
                 p_kj = get_pkj(k_radpm, mode_j, latitude, J, jstar, Hj_norm, BN0, E0) # variance of coeffs.
                 omega_jlm = omegas[j]
                 phi_jlm = phi_arr[:,j]
-                phi_jlm = np.outer(phi_jlm, phi_jlm)
-                add_m_incoh_contrib(hlzt, k_radpm, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm)
+                full_phi_jlm = np.outer(phi_jlm, phi_jlm)
+                if w:# vertical velocity
+                    full_phi_jlm *= omega_jlm**2
+                add_m_incoh_contrib(hlzt, k_radpm, l, Nt, tgrid, p_kj, omega_jlm, full_phi_jlm)
                 """
                 Add another contribution for m and l switched (since modes and omega depend only on the norm...)
                 """
                 if l != m:
-                    add_m_incoh_contrib(hlzt, k_radpm, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm) 
+                    add_m_incoh_contrib(hlzt, k_radpm, m, Nt, tgrid, p_kj, omega_jlm, full_phi_jlm) 
     return hlzt
 
-def get_incoh_w_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar, E0):
+def get_huvw_lzt(iw_disp_func, z_arr, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar, E0):
     """
     Get the Fourier transform of a displacement field realization on the plane y=0
+    as well as the Fourier transform of the velocity field realization on the plane y=0
     evaluated at discrete wavenumbers kx = l \Delta k
     l = 1, \dots, N_x
     Input:
@@ -173,10 +219,15 @@ def get_incoh_w_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
     (real h(l,z,t) = \sqrt(DK) h(l,z,t) returned here)
     """
     tgrid = np.linspace(0, dt*(Nt-1), Nt)
+    fI = 1/12 * np.sin(latitude * np.pi / 180)
+    omegaI = fI * 2 * np.pi / 3600
 
     Hj_norm = np.sum(1 / (np.linspace(1, J, J)**2 + jstar**2))
 
-    hlzt = np.zeros((Nx, Nz, Nz, Nt), dtype=np.complex_)
+    hlzt = np.zeros((Nx, Nz, Nt), dtype=np.complex_)
+    ulzt = np.zeros((Nx, Nz, Nt), dtype=np.complex_)
+    vlzt = np.zeros((Nx, Nz, Nt), dtype=np.complex_)
+    wlzt = np.zeros((Nx, Nz, Nt), dtype=np.complex_)
 
     """
     A note on the summation:
@@ -192,21 +243,21 @@ def get_incoh_w_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
         for m in range(l, Ny+1):
             ky = dk_radpm*m
             k_radpm = np.sqrt(kx**2 + ky**2)
-            k_cpkm = k_radpm * 1e3 /(2*np.pi) # convert to cpm
+            k_cpkm = k_radpm * 1e3 /(2*np.pi) # convert to cpkm for iw_disp_func
             omegas, phi_arr = iw_disp_func(k_cpkm)
             for j in range(J):
                 mode_j = j+1
                 p_kj = get_pkj(k_radpm, mode_j, latitude, J, jstar, Hj_norm, BN0, E0) # variance of coeffs.
                 omega_jlm = omegas[j]
                 phi_jlm = phi_arr[:,j]
-                phi_jlm = np.outer(phi_jlm, phi_jlm)
-                add_m_incoh_contrib(hlzt, k_radpm, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm)
+                phi_jlm_grad = np.gradient(phi_arr[:,j], z_arr)
+                add_huvw_m_contrib(hlzt, ulzt, vlzt, wlzt, dk_radpm, k_radpm, l, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm, phi_jlm_grad, omegaI)
                 """
                 Add another contribution for m and l switched (since modes and omega depend only on the norm...)
                 """
                 if l != m:
-                    add_m_incoh_contrib(hlzt, k_radpm, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm) 
-    return hlzt
+                    add_huvw_m_contrib(hlzt, ulzt, vlzt, wlzt, dk_radpm, k_radpm, m, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm, phi_jlm_grad, omegaI)
+    return hlzt, ulzt, vlzt, wlzt
 
 def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des):
     """
@@ -254,7 +305,7 @@ def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des):
     zeta_xzt = zeta_xzt[trunc_inds,...]
     return x, zeta_xzt
 
-class IWDisplacement:
+class IWField:
     def __init__(self, iw_disp):
         self.iw_disp = iw_disp
 
@@ -263,7 +314,7 @@ class IWDisplacement:
         self.E0 = E0
         return
 
-    def add_displacement_params(self, dk_cpkm,
+    def add_field_params(self, dk_cpkm,
                                       Nkx, Nky,
                                       dt, Nt, 
                                       xmax, dx_des, 
@@ -299,7 +350,7 @@ class IWDisplacement:
             raise ValueError('J must be less than or equal to {0}'.format(self.iw_disp.J))
         return
 
-    def gen_disp_field(self):
+    def gen_zeta_field(self):
         """
         Draw a random displacement field
         using Garrett-Munk spectrum
@@ -315,11 +366,9 @@ class IWDisplacement:
                                     self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
                                     self.J, lat, BN0, self.jstar, self.E0)
         x, zeta_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
-        self.x = x
-        self.zeta_xzt = zeta_xzt
         return x, zeta_xzt
 
-    def get_disp_corr_field(self):
+    def get_zeta_corr_field(self):
         """
         Get correlation function 
         rho(x-x', y-y', z, z', t-t')
@@ -338,7 +387,48 @@ class IWDisplacement:
                                     self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
                                     self.J, lat, BN0, self.jstar, self.E0)
         x, incoh_zeta_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
-        self.x = x
-        self.incoh_zeta_xzt = incoh_zeta_xzt
         return x, incoh_zeta_xzt
+
+    def get_w_corr_field(self):
+        """
+        Get correlation function 
+        sigma(x-x', y-y', z, z', t-t')
+        Fix x=0, y=0, t=0
+        return as 
+        sigma(Delta x, Delta y, z, z', Delta t)
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        dk_radpm = self.dk_cpkm * 2*np.pi / 1e3
+        zgrid = iw_disp.zgrid
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+        lat = iw_disp.latitude
+        h_lzt = get_incoh_h_lzt(disp_func, dk_radpm, self.dt, 
+                                    self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
+                                    self.J, lat, BN0, self.jstar, self.E0, w=True)
+        x, incoh_w_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
+        return x, incoh_w_xzt
+
+    def gen_zuvw_field(self):
+        """
+        Generate a random realization
+        of displacement, horizontal velocity, 
+        and vertical velocity
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        dk_radpm = self.dk_cpkm * 2*np.pi / 1e3
+        zgrid = iw_disp.zgrid
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+        lat = iw_disp.latitude
+        h_lzt, u_lzt, v_lzt, w_lzt = get_huvw_lzt(disp_func, self.iw_disp.zgrid_sav, dk_radpm, self.dt, 
+                                    self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
+                                    self.J, lat, BN0, self.jstar, self.E0)
+        x, zeta_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
+        x, u_xzt = invert_lzt_to_xzt(dk_radpm, u_lzt, self.xmax, self.dx_des)
+        x, v_xzt = invert_lzt_to_xzt(dk_radpm, v_lzt, self.xmax, self.dx_des)
+        x, w_xzt = invert_lzt_to_xzt(dk_radpm, w_lzt, self.xmax, self.dx_des)
+        return x, zeta_xzt, u_xzt, v_xzt, w_xzt
 
