@@ -38,7 +38,6 @@ def add_m_contrib(hlzt, k, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm):
         hlzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
     return
 
-
 def add_huvw_m_contrib(hlzt, ulzt, vlzt, wlzt, dk_radpm, k, l, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm, phi_jlm_grad, omega_I):
     """
     The contribution for displacment, horizontal velocity, and verticl velocity
@@ -55,18 +54,18 @@ def add_huvw_m_contrib(hlzt, ulzt, vlzt, wlzt, dk_radpm, k, l, m, Nt, tgrid, p_k
         hlzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
        
         fact = l * omega_jlm + 1j * omega_I * m
-        fact *= dk_radpm
+        fact *= dk_radpm # to conver l and m to kx and ky
         fact /= k**2
-        pos_m_contrib = (fact*gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
-        neg_m_contrib = (fact*gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        pos_m_contrib = (-fact.conj()*gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) + fact*gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        neg_m_contrib = (-fact.conj()*gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) + fact*gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
         ulzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
 
 
         fact = m * omega_jlm - 1j * omega_I * l
         fact *= dk_radpm
         fact /= k**2
-        pos_m_contrib = (fact*gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
-        neg_m_contrib = (fact*gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) - fact.conj()*gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        pos_m_contrib = (-fact*gplus_jlm*np.exp(1j*omega_jlm*tgrid[t_index]) + fact*gminus_jlm*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
+        neg_m_contrib = (-fact*gplus_jlminus_m*np.exp(1j*omega_jlm*tgrid[t_index]) + fact*gminus_jlminus_m*np.exp(-1j*omega_jlm*tgrid[t_index]))*phi_jlm_grad
         vlzt[l-1,:,t_index] += pos_m_contrib + neg_m_contrib
 
         wlzt[l-1,:,t_index] = hlzt[l-1, :, t_index] * 1j *omega_jlm 
@@ -271,7 +270,6 @@ def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des):
     zero_shape = list(h_lzt.shape[1:] )
     zero_shape = [1] + zero_shape
     zero_shape = tuple(zero_shape)
-    print('zero shape', zero_shape)
     h_lzt = np.concatenate((np.zeros((zero_shape), dtype=np.complex_), h_lzt), axis=0)
 
     """ 
@@ -308,6 +306,16 @@ def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des):
 class IWField:
     def __init__(self, iw_disp):
         self.iw_disp = iw_disp
+        self.dk_cpkm = None
+        self.Nkx = None
+        self.Nky = None
+        self.dt = None
+        self.Nt = None
+        self.xmax = None
+        self.dx_des = None
+        self.J = None
+        self.jstar = None
+        self.E0 = None
 
     def add_GM_params(self, jstar, E0):
         self.jstar = jstar
@@ -315,10 +323,10 @@ class IWField:
         return
 
     def add_field_params(self, dk_cpkm,
-                                      Nkx, Nky,
-                                      dt, Nt, 
-                                      xmax, dx_des, 
-                                      J):
+                         Nkx, Nky,
+                         dt, Nt, 
+                         xmax, dx_des, 
+                         J):
         """
         dk_cpkm - float
             spacing of the wavenumbers in cpkm
@@ -366,7 +374,9 @@ class IWField:
                                     self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
                                     self.J, lat, BN0, self.jstar, self.E0)
         x, zeta_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
-        return x, zeta_xzt
+        t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
+        z = self.iw_disp.zgrid_sav
+        return x, z, t, zeta_xzt
 
     def get_zeta_corr_field(self):
         """
@@ -387,7 +397,9 @@ class IWField:
                                     self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
                                     self.J, lat, BN0, self.jstar, self.E0)
         x, incoh_zeta_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
-        return x, incoh_zeta_xzt
+        z = iw_disp.zgrid_sav
+        t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
+        return x, z, t, incoh_zeta_xzt
 
     def get_w_corr_field(self):
         """
@@ -407,8 +419,10 @@ class IWField:
         h_lzt = get_incoh_h_lzt(disp_func, dk_radpm, self.dt, 
                                     self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
                                     self.J, lat, BN0, self.jstar, self.E0, w=True)
+        z = iw_disp.zgrid_sav
+        t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
         x, incoh_w_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
-        return x, incoh_w_xzt
+        return x, z, t, incoh_w_xzt
 
     def gen_zuvw_field(self):
         """
@@ -430,5 +444,8 @@ class IWField:
         x, u_xzt = invert_lzt_to_xzt(dk_radpm, u_lzt, self.xmax, self.dx_des)
         x, v_xzt = invert_lzt_to_xzt(dk_radpm, v_lzt, self.xmax, self.dx_des)
         x, w_xzt = invert_lzt_to_xzt(dk_radpm, w_lzt, self.xmax, self.dx_des)
-        return x, zeta_xzt, u_xzt, v_xzt, w_xzt
+        z = iw_disp.zgrid_sav
+        t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
+        return x, z, t, zeta_xzt, u_xzt, v_xzt, w_xzt
+
 

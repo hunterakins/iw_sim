@@ -270,6 +270,7 @@ class IWDispersion:
         phi_arr, phi_spl_arr = self.phi_arr, self.phi_spl_arr
         J, Nz = self.J, self.Nz_sav
         kgrid_cpkm = self.kgrid_cpkm
+
         @njit
         def disp_func(k_cpkm):
             omegas = omega_interp(k_cpkm, omega_arr, omega_spl_arr, J, kgrid_cpkm)
