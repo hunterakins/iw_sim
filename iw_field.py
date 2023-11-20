@@ -397,9 +397,39 @@ class IWField:
                                     self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
                                     self.J, lat, BN0, self.jstar, self.E0)
         x, incoh_zeta_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
+        incoh_zeta_xzt *= dk_radpm
         z = iw_disp.zgrid_sav
         t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
         return x, z, t, incoh_zeta_xzt
+
+    def get_zeta_depth_variance(self):
+        """ 
+        Get variance of displacement as function of depth
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        kgrid_cpkm = np.linspace(iw_disp.kgrid_cpkm.min(), iw_disp.kgrid_cpkm.max(), 1000) # use fine grid since it's just for integrating pkj
+        kradpm_grid = kgrid_cpkm * 2*np.pi / 1e3
+        dk = kradpm_grid[1] - kradpm_grid[0]
+        J = self.J
+        jstar = self.jstar
+
+        zgrid = iw_disp.zgrid_sav
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+
+        depth_var=  np.zeros_like(zgrid)
+        jgrid = np.linspace(1, J, J)
+        Hj_norm = np.sum(1 / (jgrid**2 + jstar**2))
+
+        for k in range(kradpm_grid.size):
+            kradpm = kradpm_grid[k]
+            kcpkm = kradpm * 1e3 / 2 / np.pi
+            pkj = get_pkj(kradpm, jgrid, iw_disp.latitude, J, jstar, Hj_norm, BN0, self.E0)
+            phi = iw_disp.get_phi(kcpkm)
+            depth_var += np.sum(pkj * phi**2, axis=1) #sum over modes
+        depth_var *= dk
+        return zgrid, depth_var
 
     def get_w_corr_field(self):
         """

@@ -19,6 +19,7 @@ def get_pkj(k_radpm, j, latitude, J, jstar, Hj_norm, BN0, E0=4.0):
     j is mode number 
     k is horizontal mode number (in radians / m)
     E0 - energy density factor (4.0 seems typical but can vary)
+    Hj_norm - normalization factor for mode weighting
     """
     F_I = 1/12 * np.sin(latitude * np.pi / 180.) # in cph
 

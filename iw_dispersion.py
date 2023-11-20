@@ -257,6 +257,7 @@ class IWDispersion:
     def get_phi(self, k_cpkm):
         phi_arr, phi_spl_arr = self.phi_arr, self.phi_spl_arr
         J, Nz = self.J, self.Nz_sav
+        kgrid_cpkm = self.kgrid_cpkm
         phi = phi_interp(k_cpkm, phi_arr, phi_spl_arr, J, Nz, kgrid_cpkm)
         return phi
 

@@ -76,7 +76,7 @@ for fname in fnames:
     field.add_GM_params(jstar, E0)
     field.add_field_params(dk_cpkm, Nkx, Nky, dt, Nt, xmax, dx_des, J)
     #x, zeta_xzt = field.gen_zeta_field()
-    x, zeta_xzt, u_xzt, v_xzt, w_xzt = field.gen_zuvw_field()
+    x, z, t, zeta_xzt, u_xzt, v_xzt, w_xzt = field.gen_zuvw_field()
     zeta_xzt = np.squeeze(zeta_xzt).T
     u_xzt = np.squeeze(u_xzt).T
     v_xzt = np.squeeze(v_xzt).T
@@ -89,7 +89,7 @@ for fname in fnames:
         obj = objs[i]
         label = labels[i]
         plt.figure()
-        plt.pcolormesh(x, disper.zgrid_sav, obj)
+        plt.pcolormesh(x, z, obj)
         plt.colorbar()
         plt.xlabel('x (m)')
         plt.ylabel('z (m)')
@@ -99,9 +99,9 @@ for fname in fnames:
     plt.show()
 
 
-    dzeta_dz = np.gradient(zeta_xzt, disper.zgrid_sav, axis=0)
+    dzeta_dz = np.gradient(zeta_xzt, z, axis=0)
     plt.figure()
-    plt.pcolormesh(x, disper.zgrid_sav, dzeta_dz)
+    plt.pcolormesh(x, z, dzeta_dz)
     plt.colorbar()
     plt.xlabel('x (m)')
     plt.ylabel('z (m)')
