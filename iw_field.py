@@ -431,6 +431,104 @@ class IWField:
         depth_var *= dk
         return zgrid, depth_var
 
+    def get_zeta_depth_cov(self, tlag):
+        """ 
+        Get covariance of displacement as function of depth and lag time
+        E((zeta(z, t) - zeta(z, t'))^2)
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        kgrid_cpkm = np.linspace(iw_disp.kgrid_cpkm.min(), iw_disp.kgrid_cpkm.max(), 1000) # use fine grid since it's just for integrating pkj
+        kradpm_grid = kgrid_cpkm * 2*np.pi / 1e3
+        dk = kradpm_grid[1] - kradpm_grid[0]
+        J = self.J
+        jstar = self.jstar
+
+        zgrid = iw_disp.zgrid_sav
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+
+        depth_var=  np.zeros((zgrid.size, tlag.size))
+        jgrid = np.linspace(1, J, J)
+        Hj_norm = np.sum(1 / (jgrid**2 + jstar**2))
+
+        for k in range(kradpm_grid.size):
+            kradpm = kradpm_grid[k]
+            kcpkm = kradpm * 1e3 / 2 / np.pi
+            pkj = get_pkj(kradpm, jgrid, iw_disp.latitude, J, jstar, Hj_norm, BN0, self.E0)
+            phi = iw_disp.get_phi(kcpkm)
+            omega = iw_disp.get_omega(kcpkm)
+            lag_term = np.cos(np.outer(omega , tlag))
+            depth_var += np.sum((pkj * phi**2)[:,:,None] * lag_term[None, ...], axis=1) #sum over modes
+        depth_var *= dk
+        return zgrid, depth_var
+
+    def get_w_depth_variance(self):
+        """ 
+        Get variance of vertical speed as function of depth
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        kgrid_cpkm = np.linspace(iw_disp.kgrid_cpkm.min(), iw_disp.kgrid_cpkm.max(), 1000) # use fine grid since it's just for integrating pkj
+        kradpm_grid = kgrid_cpkm * 2*np.pi / 1e3
+        dk = kradpm_grid[1] - kradpm_grid[0]
+        J = self.J
+        jstar = self.jstar
+
+        zgrid = iw_disp.zgrid_sav
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+
+        depth_var=  np.zeros_like(zgrid)
+        jgrid = np.linspace(1, J, J)
+        Hj_norm = np.sum(1 / (jgrid**2 + jstar**2))
+
+        for k in range(kradpm_grid.size):
+            kradpm = kradpm_grid[k]
+            kcpkm = kradpm * 1e3 / 2 / np.pi
+            pkj = get_pkj(kradpm, jgrid, iw_disp.latitude, J, jstar, Hj_norm, BN0, self.E0)
+            phi = iw_disp.get_phi(kcpkm)
+            omega = iw_disp.get_omega(kcpkm)
+            phi *= omega # I square it below
+            depth_var += np.sum(pkj * phi**2, axis=1) #sum over modes
+        depth_var *= dk #need extra factor of dk because it's a variance calculation not a field calculation
+        return zgrid, depth_var
+
+    def get_w_depth_cov(self, tlag):
+        """ 
+        Get covariance of vertical speed as function of depth and lag time
+        E((zeta(z, t) - zeta(z, t'))^2)
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        kgrid_cpkm = np.linspace(iw_disp.kgrid_cpkm.min(), iw_disp.kgrid_cpkm.max(), 1000) # use fine grid since it's just for integrating pkj
+        kradpm_grid = kgrid_cpkm * 2*np.pi / 1e3
+        dk = kradpm_grid[1] - kradpm_grid[0]
+        J = self.J
+        jstar = self.jstar
+
+        zgrid = iw_disp.zgrid_sav
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+
+        depth_var=  np.zeros((zgrid.size, tlag.size))
+        jgrid = np.linspace(1, J, J)
+        Hj_norm = np.sum(1 / (jgrid**2 + jstar**2))
+
+        for k in range(kradpm_grid.size):
+            kradpm = kradpm_grid[k]
+            kcpkm = kradpm * 1e3 / 2 / np.pi
+            pkj = get_pkj(kradpm, jgrid, iw_disp.latitude, J, jstar, Hj_norm, BN0, self.E0)
+            phi = iw_disp.get_phi(kcpkm)
+            omega = iw_disp.get_omega(kcpkm)
+            phi *= omega # I square it below
+            lag_term = np.cos(np.outer(omega , tlag))
+            term1 = (pkj * phi**2)[:,:,None] # add dummy axis for lag
+            term2 = lag_term[None,...] # add dummy axis for depth
+            depth_var += np.sum(term1*term2, axis=1) #sum over modes
+        depth_var *= dk # extra dk since it's a squarex quantity
+        return zgrid, depth_var
+
     def get_w_corr_field(self):
         """
         Get correlation function 

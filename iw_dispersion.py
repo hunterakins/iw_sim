@@ -24,7 +24,7 @@ from matplotlib import pyplot as plt
 
 def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, sav_z_arr, verbose=True):
     """
-    Get phi and gammas
+    Get phi and omegas (in rad /s )
     z_arr - np 1d array 
         grid depths for b sq
     b_sq - np 1d array
