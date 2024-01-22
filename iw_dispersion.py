@@ -22,7 +22,7 @@ from pykrak import wave_inverse_iteration as wii
 from matplotlib import pyplot as plt
 
 
-def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, sav_z_arr, verbose=True):
+def iw_solve(z_arr, b_sq, h, J, kgrid_cpkm, omega_I, sav_z_arr, verbose=False):
     """
     Get phi and omegas (in rad /s )
     z_arr - np 1d array 
@@ -103,7 +103,7 @@ class IWDispersion:
             omega_arr[j,k] is the frequency of the jth mode at the kth
             horizontal wavenumber in radians per second
         phi_arr : np 3d array
-            phi_arr[z,j,k] is the phase of the jth mode at the kth
+            phi_arr[z,j,k] is the jth mode at the kth
             horizontal wavenumber at the zth depth 
         """
         self.latitude = latitude # degrees
@@ -202,7 +202,7 @@ class IWDispersion:
         self._set_sav_dz(sav_dz)
         return
     
-    def compute_omega_phi_arr(self,verbose=True):
+    def compute_omega_phi_arr(self,verbose=False):
         """
         Get brunt vaissala frequency squared minus inertial frequency squared
         in radians per second on a mesh with spacing at least mesh_dz

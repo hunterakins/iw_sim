@@ -111,7 +111,6 @@ def get_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar
         (and therefore the same frequencies, modes, and variances)
     """
     for l in range(1, Nx+1):
-        print('l', l)
         kx = dk_radpm*l
         for m in range(l, Ny+1):
             ky = dk_radpm*m
@@ -131,7 +130,7 @@ def get_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar
                     add_m_contrib(hlzt, k_radpm, m, Nt, tgrid, p_kj, omega_jlm, phi_jlm) 
     return hlzt
 
-def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar, E0, w=False):
+def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0, jstar, E0, w=False, ww=False):
     """
     Get the Fourier transform of a displacement field realization on the plane y=0
     evaluated at discrete wavenumbers kx = l \Delta k
@@ -158,6 +157,8 @@ def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
     I HANDLE THAT IN AT THE END WHEN I DO THE FOURIER TRANSFORM OVER KX
     AS A RESULT THE FUNCTION RETURNED IS OFF FROM IT'S TRUE VALUE BY A FACTOR OF \SQRT(DK)
     (real h(l,z,t) = \sqrt(DK) h(l,z,t) returned here)
+    w gives you the vertical displacement time derivative
+    ww gives you the second displacement time derivative
     """
     tgrid = np.linspace(0, dt*(Nt-1), Nt)
 
@@ -189,6 +190,8 @@ def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
                 full_phi_jlm = np.outer(phi_jlm, phi_jlm)
                 if w:# vertical velocity
                     full_phi_jlm *= omega_jlm**2
+                elif ww:
+                    full_phi_jlm *= omega_jlm**4
                 add_m_incoh_contrib(hlzt, k_radpm, l, Nt, tgrid, p_kj, omega_jlm, full_phi_jlm)
                 """
                 Add another contribution for m and l switched (since modes and omega depend only on the norm...)
@@ -258,7 +261,7 @@ def get_huvw_lzt(iw_disp_func, z_arr, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, 
                     add_huvw_m_contrib(hlzt, ulzt, vlzt, wlzt, dk_radpm, k_radpm, m, l, Nt, tgrid, p_kj, omega_jlm, phi_jlm, phi_jlm_grad, omegaI)
     return hlzt, ulzt, vlzt, wlzt
 
-def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des):
+def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des, verbose=False):
     """
     Take inverse Fourier transform of h_lzt
     Zero pad to get the desired resolution dx_des
@@ -276,16 +279,17 @@ def invert_lzt_to_xzt(dk, h_lzt, xmax, dx_des):
     zeros pad for finer r resolution
     """
     Xmax = 2*np.pi / dk
-    print('Xmax', Xmax)
     kmax = h_lzt.shape[0] * dk
     dx = np.pi / kmax
-    print('dx', dx)
     kmax_des = np.pi / dx_des
     factor = kmax_des / kmax
-    print('factor', factor)
     factor = max(1, factor)
     des_Nkx = int(Nkx * factor)
-    print('des Nkx', des_Nkx)
+    if verbose:
+        print('Xmax', Xmax)
+        print('dx', dx)
+        print('factor', factor)
+        print('des Nkx', des_Nkx)
     zeros_to_add = des_Nkx - Nkx
     #add_arr = np.zeros_like(h_lzt)
     #add_arr = add_arr[:zeros_to_add,...]
@@ -390,6 +394,7 @@ class IWField:
         disp_func = iw_disp.make_disp_func()
         dk_radpm = self.dk_cpkm * 2*np.pi / 1e3
         zgrid = iw_disp.zgrid
+        print(iw_disp.bv_zgrid.shape, iw_disp.bv_cph.shape)
         bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
         BN0 = np.trapz(bv_cph, zgrid)
         lat = iw_disp.latitude
@@ -550,6 +555,26 @@ class IWField:
         z = iw_disp.zgrid_sav
         t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
         x, incoh_w_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
+        incoh_w_xzt *= dk_radpm
+        return x, z, t, incoh_w_xzt
+
+    def get_ww_corr_field(self):
+        """
+        """
+        iw_disp = self.iw_disp
+        disp_func = iw_disp.make_disp_func()
+        dk_radpm = self.dk_cpkm * 2*np.pi / 1e3
+        zgrid = iw_disp.zgrid
+        bv_cph = np.interp(zgrid, iw_disp.bv_zgrid, iw_disp.bv_cph)
+        BN0 = np.trapz(bv_cph, zgrid)
+        lat = iw_disp.latitude
+        h_lzt = get_incoh_h_lzt(disp_func, dk_radpm, self.dt, 
+                                    self.Nkx, self.Nky, self.iw_disp.Nz_sav, self.Nt, 
+                                    self.J, lat, BN0, self.jstar, self.E0, ww=True)
+        z = iw_disp.zgrid_sav
+        t = np.linspace(0, (self.Nt - 1)*self.dt, self.Nt)
+        x, incoh_w_xzt = invert_lzt_to_xzt(dk_radpm, h_lzt, self.xmax, self.dx_des)
+        incoh_w_xzt *= dk_radpm # the inversion only includes on of the dk factors since its not for the product of kernels
         return x, z, t, incoh_w_xzt
 
     def gen_zuvw_field(self):
