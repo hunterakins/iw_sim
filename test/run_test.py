@@ -128,8 +128,8 @@ for fname in fnames:
     kmax = Nkx * dk_cpkm #
     dt = 100
     Nt = 1
-    xmax = 5*1e3
-    dx_des = 500
+    xmax = 100*1e3
+    dx_des = 1000
     J = 20
     jstar = 3.0
     E0 = 4.0
@@ -139,15 +139,14 @@ for fname in fnames:
     #x, zeta_xzt = field.gen_zeta_field()
     x, z, t, zeta_xzt, u_xzt, v_xzt, w_xzt = field.gen_zuvw_field()
 
-    iso_mesh, pert_mesh = helpers.get_isopycnal_zpert(deltaZ, z, zeta_xzt)
-    z_fine = add_poisson_finestructure(pert_mesh, DeltaZ, kappa0, num_els, zmin, zmax)
+    #iso_mesh, pert_mesh = helpers.get_isopycnal_zpert(deltaZ, z, zeta_xzt)
+    #z_fine = add_poisson_finestructure(pert_mesh, DeltaZ, kappa0, num_els, zmin, zmax)
 
     plt.figure()
     tmp = zeta_xzt[0,:,0]
     kz_tmp = np.fft.fftshift(np.fft.fftfreq(tmp.size, z[1] - z[0]))
-    plt.plot(kz_tmp, np.abs(np.fft.fftshift(np.fft.fft(tmp))))
 
-
+    """
     plt.figure()
     for l in range(x.size):
         for kk in range(iso_mesh.size):
@@ -158,6 +157,7 @@ for fname in fnames:
     plt.gca().invert_yaxis()
     plt.ylabel('z (m)')
     plt.xlabel('x (m)')
+    """
 
     zeta_xzt = np.squeeze(zeta_xzt).T
     u_xzt = np.squeeze(u_xzt).T

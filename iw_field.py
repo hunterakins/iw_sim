@@ -175,7 +175,7 @@ def get_incoh_h_lzt(iw_disp_func, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, BN0,
         (and therefore the same frequencies, modes, and variances)
     """
     for l in range(1, Nx+1):
-        print('l', l)
+        #print('l', l)
         kx = dk_radpm*l
         for m in range(l, Ny+1):
             ky = dk_radpm*m
@@ -240,7 +240,7 @@ def get_huvw_lzt(iw_disp_func, z_arr, dk_radpm, dt, Nx, Ny, Nz, Nt,J, latitude, 
         (and therefore the same frequencies, modes, and variances)
     """
     for l in range(1, Nx+1):
-        print('l', l)
+        #print('l', l)
         kx = dk_radpm*l
         for m in range(l, Ny+1):
             ky = dk_radpm*m
