@@ -156,7 +156,9 @@ class IWDispersion:
         Z = z[-1] - z[0]
         Nz = int(Z / mesh_dz) + 1
         zgrid = np.linspace(z[0], z[-1], Nz)
-        b_sq = interp.vec_lin_int(zgrid, z, b_sq)
+        d2b_sqdz2 = interp.get_spline(z, b_sq, 0e30, 0e30)
+        b_sq = interp.vec_splint(zgrid, z, b_sq, d2b_sqdz2)[0]
+        #b_sq = interp.vec_lin_int(zgrid, z, b_sq)
         self.zgrid = zgrid
         self.b_sq = b_sq
         self.Nz = Nz
