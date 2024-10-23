@@ -93,6 +93,6 @@ dependencies:
   - zstd=1.5.5=hc292b87_0
   - pip:
       - gsw==3.6.17
-      - pykrak==2.0.2
+      - pykrak==2.0.4
       - scipy==1.11.3
 prefix: /home/hunter/anaconda3/envs/iw_sim
